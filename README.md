@@ -16,7 +16,7 @@ Brief abstract about the project and what it is accomplishing
 
 ---
 
-## 📊 Datasets
+## Datasets
 
 SFA-Fuse was tested on two widely used AGT detection datasets:
 
