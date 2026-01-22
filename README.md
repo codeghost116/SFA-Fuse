@@ -1,8 +1,8 @@
-# Project Title
+# SFA-Fuse (Spatial–Frequency–Attention Fusion) for Deepfake Detection in Low-Resolution Images
 
 Brief Intro to the topic and contents of the repo.
 
-> **Paper:** *Project Title*  
+> **Paper:** *Multi-Stream Fusion of Spatial, Frequency, and Attention Features for Robust Deepfake Detection in Low-Resolution Images*  
 
 ---
 
