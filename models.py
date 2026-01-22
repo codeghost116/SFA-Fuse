@@ -69,3 +69,122 @@ class TriAFN(nn.Module):
 
         logits = self.classifier_head(fused_vector)
         return logits
+
+class SimpleXceptionBlock(nn.Module):
+    def __init__(self, in_ch, out_ch, stride=1):
+        super().__init__()
+        self.relu = nn.ReLU(inplace=False)
+
+        self.depthwise1 = nn.Conv2d(
+            in_ch,
+            in_ch,
+            kernel_size=3,
+            stride=stride,
+            padding=1,
+            groups=in_ch,
+            bias=False,
+        )
+        self.pointwise1 = nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_ch)
+
+        self.depthwise2 = nn.Conv2d(
+            out_ch,
+            out_ch,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            groups=out_ch,
+            bias=False,
+        )
+        self.pointwise2 = nn.Conv2d(out_ch, out_ch, kernel_size=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_ch)
+
+        if stride != 1 or in_ch != out_ch:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
+        else:
+            self.shortcut = nn.Identity()
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+
+        out = self.relu(x)
+        out = self.depthwise1(out)
+        out = self.pointwise1(out)
+        out = self.bn1(out)
+
+        out = self.relu(out)
+        out = self.depthwise2(out)
+        out = self.pointwise2(out)
+        out = self.bn2(out)
+
+        out = out + residual
+        return out
+
+
+class XceptionNet(nn.Module):
+    def __init__(self, num_classes=1):
+        super().__init__()
+        self.entry = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(32, 64, 3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=False),
+        )
+
+        self.block1 = SimpleXceptionBlock(64, 128, stride=2)
+        self.block2 = SimpleXceptionBlock(128, 256, stride=2)
+        self.block3 = SimpleXceptionBlock(256, 512, stride=2)
+
+        self.tail = nn.Sequential(
+            nn.ReLU(inplace=False),
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+        self.fc = nn.Linear(512, num_classes)
+
+    def forward(self, x):
+        x = self.entry(x)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.tail(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x.view(-1)
+
+
+class BaselineCNN(nn.Module):
+    def __init__(self, num_classes=1):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 32, 3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=False),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(32, 64, 3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=False),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(64, 128, 3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=False),
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(128, 256, 3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=False),
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+        self.fc = nn.Linear(256, num_classes)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x.view(-1)
