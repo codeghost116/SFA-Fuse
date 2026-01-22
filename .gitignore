@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+
+# PyTorch
+*.pt
+*.pth
+*.ckpt
+
+# Datasets (DO NOT COMMIT)
+data/
+datasets/
+frames/
+videos/
+
+# Experiment outputs
+runs/
+outputs/
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS junk
+.DS_Store
+Thumbs.db
