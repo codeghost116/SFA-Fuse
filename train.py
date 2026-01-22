@@ -20,8 +20,14 @@ from sklearn.metrics import (
 
 import torchvision.transforms as T
 
-from datasets import FFPPFrameDataset, tri_collate_fn
-from models import TriAFN
+from datasets import (
+    FFPPFrameDataset,
+    CelebDFImageDataset,
+    RealFakeImageDataset,
+    tri_collate_fn,
+    single_collate_fn,
+)
+from models import TriAFN, XceptionNet, BaselineCNN
 import features as F
 
 
@@ -60,26 +66,26 @@ def set_image_size(img_size: int):
     )
 
 
-def build_model(model_variant: str) -> nn.Module:
+def build_model(model_variant: str):
     if model_variant == "tri_afn_b0":
         return TriAFN(model_name="efficientnet_b0", feature_dim=256)
     if model_variant == "tri_afn_b4":
         return TriAFN(model_name="tf_efficientnet_b4_ns", feature_dim=512)
+    if model_variant == "xception_spatial":
+        return XceptionNet(num_classes=1)
+    if model_variant == "baseline_cnn_spatial":
+        return BaselineCNN(num_classes=1)
     raise ValueError(f"Unknown model_variant: {model_variant}")
 
 
-def make_loader(root: str, img_size: int, batch_size: int, augment: bool, shuffle: bool, num_workers: int):
-    set_image_size(img_size)
-    dataset = FFPPFrameDataset(root, augment=augment)
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=True,
-        collate_fn=tri_collate_fn,
-    )
-    return loader
+def make_loader(root: str, model_variant: str, img_size: int, batch_size: int, augment: bool, shuffle: bool, num_workers: int):
+    if is_tri_stream(model_variant):
+        set_image_size(img_size)
+        ds = FFPPFrameDataset(root, augment=augment)
+        return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, collate_fn=tri_collate_fn)
+
+    ds = RealFakeImageDataset(root, img_size=img_size, augment=augment)
+    return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, collate_fn=single_collate_fn)
 
 
 def evaluate_on_loader(model: nn.Module, loader: DataLoader, desc: str) -> Dict[str, Any]:
@@ -94,7 +100,11 @@ def evaluate_on_loader(model: nn.Module, loader: DataLoader, desc: str) -> Dict[
             noise_batch = noise_batch.to(device)
             labels = labels.view(-1).to(device)
 
-            logits = model(spatial_batch, freq_batch, noise_batch).view(-1)
+            if is_tri_stream(cfg.model_variant):
+                logits = model(spatial_batch, freq_batch, noise_batch).view(-1)
+            else:
+                logits = model(img_batch).view(-1)
+
             all_logits.append(logits.cpu().numpy())
             all_labels.append(labels.cpu().numpy())
 
@@ -233,6 +243,8 @@ def parse_args():
     p.add_argument("--save_path", type=str, default="best_model.pt")
     return p.parse_args()
 
+def is_tri_stream(model_variant: str) -> bool:
+    return model_variant.startswith("tri_afn")
 
 if __name__ == "__main__":
     args = parse_args()
