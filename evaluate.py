@@ -13,8 +13,15 @@ from sklearn.metrics import (
     classification_report,
 )
 
-from models import TriAFN
-from datasets import tri_collate_fn, FFPPFrameDataset, CelebDFImageDataset
+from datasets import (
+    FFPPFrameDataset,
+    CelebDFImageDataset,
+    RealFakeImageDataset,
+    tri_collate_fn,
+    single_collate_fn,
+)
+from models import TriAFN, XceptionNet, BaselineCNN
+
 import utils
 
 
@@ -33,7 +40,11 @@ def eval_loader(model, loader):
             noise_batch = noise_batch.to(device)
             labels = labels.view(-1).to(device)
 
-            logits = model(spatial_batch, freq_batch, noise_batch).view(-1)
+            if is_tri_stream(cfg.model_variant):
+                logits = model(spatial_batch, freq_batch, noise_batch).view(-1)
+            else:
+                logits = model(img_batch).view(-1)
+
             all_logits.append(logits.cpu().numpy())
             all_labels.append(labels.cpu().numpy())
 
@@ -90,6 +101,8 @@ def parse_args():
     p.add_argument("--num_workers", type=int, default=2)
     return p.parse_args()
 
+def is_tri_stream(model_variant: str) -> bool:
+    return model_variant.startswith("tri_afn")
 
 if __name__ == "__main__":
     args = parse_args()
