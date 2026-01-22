@@ -19,7 +19,7 @@ The framework integrates
 These streams are fused using attention mechanisms that emphasize manipulation sensitive information while suppressing dataset specific bias. This design enables robust performance under low resolution conditions and out of distribution evaluation.
 
 <p align="center">
-  <img src="figures/sfa_fuse_architecture.png" width="800">
+  <img src="sfa_fuse_architecture.png" width="800">
 </p>
 
 ---
