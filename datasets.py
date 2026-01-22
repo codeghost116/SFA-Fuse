@@ -177,6 +177,82 @@ def tri_collate_fn(batch):
         noise_list.append(noise)
         label_list.append(label)
 
+
+def make_spatial_transform(img_size: int):
+    return T.Compose(
+        [
+            T.ToTensor(),
+            T.Resize((img_size, img_size)),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+
+class RealFakeImageDataset(Dataset):
+    def __init__(self, data_root_dir, img_size: int = 256, augment: bool = False):
+        self.data_root = Path(data_root_dir)
+        self.augment = augment
+        self.transform = make_spatial_transform(img_size)
+        self.samples = []
+
+        patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp"]
+        for ext in patterns:
+            for img_path in self.data_root.rglob(ext):
+                pstr = str(img_path).lower()
+                is_real = "real" in pstr
+                is_fake = "fake" in pstr
+
+                label = None
+                if is_real and not is_fake:
+                    label = 0
+                elif is_fake and not is_real:
+                    label = 1
+                elif is_real and is_fake:
+                    label = 1
+
+                if label is not None:
+                    self.samples.append((img_path, label))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def _low_res_augment(self, img_rgb):
+        if random.random() < 0.5:
+            return img_rgb
+
+        h, w, _ = img_rgb.shape
+        scale = random.choice([0.5, 0.6, 0.7])
+        new_w = max(8, int(w * scale))
+        new_h = max(8, int(h * scale))
+
+        small = cv2.resize(img_rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        restored = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
+        return restored
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+
+        bgr = cv2.imread(str(img_path))
+        if bgr is None:
+            new_idx = random.randint(0, len(self.samples) - 1)
+            return self.__getitem__(new_idx)
+
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+        if self.augment:
+            rgb = self._low_res_augment(rgb)
+
+        img_tensor = self.transform(rgb)
+        label_tensor = torch.tensor([float(label)], dtype=torch.float32)
+        return img_tensor, label_tensor
+
+
+def single_collate_fn(batch):
+    imgs = [x[0] for x in batch]
+    labels = [x[1] for x in batch]
+    return torch.stack(imgs), torch.stack(labels).view(-1, 1)
+
+
     spatial_batch = torch.stack(spatial_list)
     freq_batch = torch.stack(freq_list)
     noise_batch = torch.stack(noise_list)
